@@ -1,0 +1,198 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import './Panel.css';
+import Room from './Room';
+import { io } from 'socket.io-client';
+import { useMedia } from '../../hooks/useMedia';
+
+const Panel = () => {
+  const [currentPage, setCurrentPage] = useState('page1');
+  const [nameId, setNameId] = useState("");
+  const [room, setRoom] = useState("");
+  const socket = useMemo(() => io("http://localhost:8000"), []);
+
+  const handleSubmit = useCallback((e: any) => {
+    e.preventDefault();
+    console.log("Joining room...");
+    socket?.emit('room:join', { nameId, room });
+    setCurrentPage('room');
+  }, [socket, nameId, room]);
+
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
+  const { startMedia, stopMediaStream, onClickStartMedia } = useMedia({ mediaStream, setMediaStream });
+
+
+  // Send message to background script for permissions
+  useEffect(() => {
+    chrome.runtime.sendMessage({ action: "startStream" }, (response) => {
+      console.log("Message sent to background:", response);
+    });
+  }, []);
+
+
+  return (
+    <div>
+      {currentPage === 'room' ? <Room
+        socket={socket}
+        stream={mediaStream}
+        stopMediaStream={stopMediaStream}
+        onClickStartMedia={onClickStartMedia}
+      /> :
+        <main className="main-bg">
+          <form className="form" onSubmit={handleSubmit}>
+            {/* <h1 className="text-3xl flex justify-between">XShare - Share your files</h1> */}
+            <div className="form-content">
+
+              <div className="name">
+                <label htmlFor="name">Name</label>
+                <input
+                  type="text"
+                  id="name"
+                  value={nameId}
+                  onChange={(e) => setNameId(e.target.value)}
+                />
+              </div>
+              <div className="room">
+                <label htmlFor="room">Room</label>
+                <input
+                  type="text"
+                  id="room"
+                  value={room}
+                  onChange={(e) => setRoom(e.target.value)}
+                />
+              </div>
+              <button className="btn" type="submit">Join</button>
+            </div>
+          </form>
+        </main>
+      }
+    </div>
+  );
+};
+
+export default Panel;
+
+
+
+
+
+
+
+
+// next
+
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import './Panel.css';
+import Room from './Room';
+import { io } from 'socket.io-client';
+import ReactPlayer from 'react-player';
+
+const Panel = () => {
+  const [currentPage, setCurrentPage] = useState('page1');
+  const [nameId, setNameId] = useState("");
+  const [room, setRoom] = useState("");
+  const socket = useMemo(() => io("http://localhost:8000"), []);
+
+  const handleSubmit = useCallback((e: any) => {
+    e.preventDefault();
+    console.log("Joining room...");
+    socket?.emit('room:join', { nameId, room });
+    setCurrentPage('room');
+  }, [socket, nameId, room]);
+
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+
+  const startMediaStream = () => {
+    navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true
+    }).then((stream) => {
+      console.log(stream)
+      setMediaStream(stream);
+    }).catch(err => {
+      console.log(err)
+    })
+    // chrome.runtime.sendMessage({ type: 'startStream' });
+  };
+
+  const stopMediaStream = () => {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop()); // Stop all tracks (audio & video)
+      setMediaStream(null); // Clear the state
+      console.log("Media stream stopped.");
+    } else {
+      console.log("No media stream to stop.");
+    }
+  };
+
+  useEffect(() => {
+    chrome.runtime.sendMessage({ action: "startStream" }, (response) => {
+      console.log("Message sent to background:", response);
+    });
+  }, [])
+
+  useEffect(() => {
+    navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: true
+    }).then((stream) => {
+      console.log(stream)
+      setMediaStream(stream);
+    }).catch(err => {
+      console.log(err)
+    })
+  }, [])
+
+
+  return (
+    <div>
+      {currentPage === 'room' ? <Room socket={socket} /> :
+        <main className="main-bg">
+          {/* <form className="form" onSubmit={handleSubmit}> */}
+          {/* <h1 className="text-3xl flex justify-between">XShare - Share your files</h1> */}
+          <div className="form-content">
+
+            {mediaStream &&
+              <ReactPlayer url={mediaStream} playing />
+            }
+            <button onClick={stopMediaStream}>Stop</button>
+            <button onClick={startMediaStream}>Start</button>
+            <div className="name">
+              <label htmlFor="name">Name</label>
+              <input
+                type="text"
+                id="name"
+                value={nameId}
+                onChange={(e) => setNameId(e.target.value)}
+              />
+            </div>
+            <div className="room">
+              <label htmlFor="room">Room</label>
+              <input
+                type="text"
+                id="room"
+                value={room}
+                onChange={(e) => setRoom(e.target.value)}
+              />
+            </div>
+            <button className="btn" type="submit">Join</button>
+          </div>
+          {/* </form> */}
+        </main>
+      }
+    </div>
+  );
+};
+
+export default Panel;
+
+
+
+
+
+
+
+
+
+
