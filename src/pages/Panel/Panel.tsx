@@ -11,8 +11,7 @@ import { Button } from '../../components/Button';
 const Panel = () => {
   const [currentPage, setCurrentPage] = useState('');
   const [nameId, setNameId] = useState("");
-  const [room, setRoom] = useState("");
-  const { socket, remoteSocketId, setRemoteSocketId, setCurrentUser } = useSocket()
+  const { socket, remoteSocketId, room, setRoom, setRemoteSocketId, setCurrentUserSocketId, setCurrentUser } = useSocket()
 
   const handleSubmit = useCallback((e: any) => {
     e.preventDefault();
@@ -22,6 +21,8 @@ const Panel = () => {
     setCurrentUser(nameId);
     socket?.emit('room:join', { nameId, room });
     setCurrentPage('room');
+    setRoom(room);
+    setCurrentUserSocketId(socket?.id as string);
   }, [socket, nameId, room]);
 
 
@@ -67,7 +68,7 @@ const Panel = () => {
             <Input
               type="text"
               placeholder="Enter room code"
-              value={room}
+              value={room!}
               onChange={(e) => setRoom(e.target.value)}
               className="bg-gray-800 border-gray-700 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-pink-500 transition-all duration-300"
               onKeyPress={(e) => e.key === 'Enter' && handleSubmit(e)}

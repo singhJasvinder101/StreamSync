@@ -3,7 +3,6 @@
 import React, { useState, useMemo, createContext, useContext, FC, ReactNode, SetStateAction, Dispatch } from "react";
 import { Socket, io } from "socket.io-client";
 
-// Define an interface for the context value to include socket, remoteSocketId, and setRemoteSocketId
 interface SocketContextValue {
     socket: Socket | null;
     remoteSocketId: string | null;
@@ -14,20 +13,26 @@ interface SocketContextValue {
     setMediaStream: Dispatch<React.SetStateAction<MediaStream | null>>;
     currentUser: string | null;
     setCurrentUser: Dispatch<SetStateAction<string>>;
+    currentUserSocketId: string | null;
+    setCurrentUserSocketId: Dispatch<SetStateAction<string>>;
+    room: string | null;
+    setRoom: Dispatch<SetStateAction<string>>;
 }
 
-// Create the Socket context with the appropriate type
 const SocketContext = createContext<SocketContextValue | null>(null);
 
-// SocketProvider component to provide socket and remoteSocketId to children components
 export const SocketProvider: FC<{ children: ReactNode }> = ({ children }) => {
     const socket = useMemo(() => io("http://localhost:8000"), []);
+
+    // production
+    // const socket = useMemo(() => io("http://ec2-13-60-225-135.eu-north-1.compute.amazonaws.com"), []);
     const [remoteSocketId, setRemoteSocketId] = useState<string | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
     const [mediaStream, setMediaStream] = useState<MediaStream | null>(null)
     const [currentUser, setCurrentUser] = useState('');
+    const [currentUserSocketId, setCurrentUserSocketId] = useState('')
+    const [room, setRoom] = useState("")
 
-    // Pass socket, remoteSocketId, and setRemoteSocketId as an object to the provider
     return (
         <SocketContext.Provider value={{
             socket,
@@ -38,14 +43,17 @@ export const SocketProvider: FC<{ children: ReactNode }> = ({ children }) => {
             mediaStream,
             setMediaStream,
             currentUser,
-            setCurrentUser
+            setCurrentUser,
+            currentUserSocketId,
+            setCurrentUserSocketId,
+            room,
+            setRoom
         }}>
             {children}
         </SocketContext.Provider>
     );
 }
 
-// Custom hook to use the Socket context
 export const useSocket = () => {
     const context = useContext(SocketContext);
     if (!context) {

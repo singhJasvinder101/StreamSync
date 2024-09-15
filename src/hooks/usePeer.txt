@@ -274,7 +274,7 @@ export const usePeerService = (socket: Socket, remoteSocketId: string | null, se
 
   useEffect(() => {
     socket.on('room:message', (data) => {
-      console.log('Message received:', data);
+      console.log('Message received:', data); 
       setRoomMessages(prevMessages => [...prevMessages, { from: data.from, message: data.message }]);
     });
 
@@ -326,6 +326,292 @@ export const usePeerService = (socket: Socket, remoteSocketId: string | null, se
     message,
     roomMessages,
     setRoomMessages
+  };
+};
+
+
+
+// for 3 peer
+
+import { useCallback, useEffect, useState } from 'react';
+import peerService from '../services/Peer';
+import { Socket } from 'socket.io-client';
+import { useSocket } from '../contexts/SocketProvider';
+
+type FileMetadata = {
+  name: string;
+  size: number;
+  type: string;
+};
+
+interface RoomUser {
+  nameId: string;
+  socketId: string;
+}
+
+interface MessageObject {
+  [key: string]: string;
+}
+
+interface MediaStreamsObject {
+  [key: string]: MediaStream;
+}
+
+interface UserMessage {
+  from: string;
+  message: string;
+}
+
+export const usePeerService = (socket: Socket, remoteSocketId: string | null, setRemoteSocketId: (data: string) => void) => {
+  const [remoteUser, setRemoteUser] = useState<string | null>(null);
+  const [isDisabled, setIsDisabled] = useState<boolean>(false);
+  const [buttonMessage, setButtonMessage] = useState<MessageObject>({});
+  const [downloadLink, setDownloadLink] = useState<string | null>(null);
+  const [receivedChunks, setReceivedChunks] = useState<{ metadata: FileMetadata | null; chunks: ArrayBuffer[] } | null>(null);
+  const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
+  const [remoteStreams, setRemoteStreams] = useState<MediaStreamsObject>({});
+  const [message, setMessage] = useState<string | null>("");
+  const [roomMessages, setRoomMessages] = useState<UserMessage[]>([]);
+
+  const { mediaStream } = useSocket();
+  const chunkSize = 16 * 1024; // 16 KB chunks
+
+  const handleRoomJoined = (data: { id: string; nameId: string }) => {
+    setRemoteSocketId(data.id);
+    setRemoteUser(data.nameId);
+  };
+
+  useEffect(() => {
+    socket.on('room:users', (data: { users: RoomUser[] }) => {
+      setRoomUsers(data.users);
+
+      const newMessages: MessageObject = {};
+      data.users.forEach(user => {
+        newMessages[user.socketId] = `Call ${user.nameId}`;
+      });
+
+      setButtonMessage(prevMessages => ({
+        ...prevMessages,
+        ...newMessages,
+      }));
+    });
+
+    return () => {
+      socket.off('room:users');
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    console.log(roomUsers);
+  }, [roomUsers]);
+
+  const handleCallUser = useCallback(async (remoteSocketId: string) => {
+    const offer = await peerService?.getOffer();
+    socket.emit("user:call", { to: remoteSocketId, offer });
+
+    setButtonMessage(prevMessages => ({
+      ...prevMessages,
+      [remoteSocketId]: "Call Sent!! Yupp"
+    }));
+
+    setIsDisabled(true);
+  }, [remoteSocketId, socket]);
+
+  useEffect(() => {
+    peerService.remoteSocketId = remoteSocketId;
+  }, [remoteSocketId]);
+
+  const handleIncomingCall = useCallback(async (data: { from: string; offer: RTCSessionDescriptionInit; nameId: string }) => {
+    const { from, offer, nameId } = data;
+    setRemoteSocketId(from);
+    const ans = await peerService.getAnswer(offer);
+    setRemoteUser(nameId);
+
+    setButtonMessage(prevMessages => ({
+      ...prevMessages,
+      [from]: "Accept Call!!"
+    }));
+
+    socket.emit("call:accepted", { to: from, ans });
+  }, [socket]);
+
+  const handleCallAccepted = useCallback((data: { from: string; ans: RTCSessionDescriptionInit }) => {
+    const { ans } = data;
+    peerService.setLocalDescription(ans);
+    sendStream();
+    setIsDisabled(true);
+  }, []);
+
+  const handleNegoNeeded = useCallback(async () => {
+    const offer = await peerService.getOffer();
+    socket.emit("peer:nego:needed", { offer, to: remoteSocketId });
+  }, [remoteSocketId, socket]);
+
+  useEffect(() => {
+    const peerServiceInit = peerService.init()
+    peerService?.peer?.addEventListener('negotiationneeded', handleNegoNeeded)
+    return () => {
+      peerService.peer?.removeEventListener("negotiationneeded", handleNegoNeeded);
+    };
+  }, [remoteStreams, handleNegoNeeded]);
+
+  const handleNegoNeedIncoming = useCallback(async (data: { from: string; offer: RTCSessionDescriptionInit }) => {
+    const { from, offer } = data;
+    const ans = await peerService.getAnswer(offer);
+    socket.emit("peer:nego:done", { to: from, ans });
+  }, [socket]);
+
+  const handleNegoNeedFinal = useCallback(async (data: { ans: RTCSessionDescriptionInit }) => {
+    const { ans } = data;
+    await peerService.setLocalDescription(ans);
+  }, []);
+
+  useEffect(() => {
+    if (peerService.peer) {
+      peerService.peer.ondatachannel = (e: RTCDataChannelEvent) => { 
+        peerService.remoteDataChanel = e.channel
+        peerService.remoteDataChanel.onmessage = (e: MessageEvent) => {
+          handleReceiveFile(e.data);
+        };
+      }
+    }
+    return () => {
+      peerService.remoteDataChanel?.removeEventListener('message', handleReceiveFile);
+    };
+  }, [peerService.peer]);
+
+  const handleSendFile = async (file: File) => {
+    if (file && peerService.myDataChanel) {
+      const arrayBuffer = await readFileAsArrayBuffer(file);
+      const metadata: FileMetadata = {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      };
+
+      if (peerService.myDataChanel.readyState === 'open') {
+        peerService.myDataChanel.send(JSON.stringify(metadata));
+
+        for (let offset = 0; offset < arrayBuffer.byteLength; offset += chunkSize) {
+          const chunk = arrayBuffer.slice(offset, offset + chunkSize);
+          peerService.myDataChanel.send(chunk);
+        }
+      } else {
+        console.log('RTCDataChannel not in open state');
+      }
+    }
+  };
+
+  const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        if (e.target?.result instanceof ArrayBuffer) {
+          resolve(e.target.result);
+        } else {
+          reject(new Error('Failed to read file as ArrayBuffer.'));
+        }
+      };
+
+      reader.onerror = (error) => {
+        reject(error);
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  const handleReceiveFile = useCallback((data: any) => {
+    if (typeof data === 'string') {
+      const metadata = JSON.parse(data);
+      setReceivedChunks(prev => prev ? { ...prev, metadata } : { metadata, chunks: [] });
+    } else if (data instanceof ArrayBuffer) {
+      setReceivedChunks(prev => prev ? { ...prev, chunks: [...prev.chunks, data] } : { metadata: null, chunks: [data] });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (receivedChunks && receivedChunks.metadata && receivedChunks.chunks.length === Math.ceil(receivedChunks.metadata.size / chunkSize)) {
+      const fileData = new Blob(receivedChunks.chunks, { type: receivedChunks.metadata.type });
+      const downloadLink = URL.createObjectURL(fileData);
+      setDownloadLink(downloadLink);
+    }
+  }, [receivedChunks]);
+
+
+
+  const sendStream = () => {
+    mediaStream?.getTracks().forEach(track => peerService.peer?.addTrack(track, mediaStream));
+  };
+
+  const handleStreamTrackEvent = useCallback((event: RTCTrackEvent) => {
+    const remoteStream = event.streams[0];
+    setRemoteStreams(prevStreams => ({
+      ...prevStreams,
+      [peerService.remoteSocketId!]: remoteStream,
+    }));
+  }, [peerService.remoteSocketId]);
+
+  useEffect(() => {
+    peerService.peer?.addEventListener('track', handleStreamTrackEvent);
+
+    return () => {
+      peerService.peer?.removeEventListener('track', handleStreamTrackEvent);
+    };
+  }, [peerService.peer, handleStreamTrackEvent]);
+
+
+  
+  const handleSendMessage = (message: string, room: string, from: string) => {
+    socket.emit('user:message', { message, room, from });
+  };
+
+  useEffect(() => {
+    socket.on('room:message', (data: { from: string; message: string }) => {
+      setRoomMessages(prevMessages => [...prevMessages, { from: data.from, message: data.message }]);
+    });
+
+    return () => {
+      socket.off('room:message');
+    };
+  }, [socket]);
+
+  useEffect(() => {
+    socket.on('user:joined', handleRoomJoined);
+    socket.on("incoming:call", handleIncomingCall);
+    socket.on("call:accepted", handleCallAccepted);
+    socket.on("peer:nego:needed", handleNegoNeedIncoming);
+    socket.on("peer:nego:final", handleNegoNeedFinal);
+
+    return () => {
+      socket.off("user:joined", handleRoomJoined);
+      socket.off("incoming:call", handleIncomingCall);
+      socket.off("call:accepted", handleCallAccepted);
+      socket.off("peer:nego:needed", handleNegoNeedIncoming);
+      socket.off("peer:nego:final", handleNegoNeedFinal);
+    };
+  }, [socket, handleRoomJoined, handleIncomingCall, handleCallAccepted, handleNegoNeedIncoming, handleNegoNeedFinal]);
+
+  return {
+    remoteUser,
+    isDisabled,
+    buttonMessage,
+    handleCallUser,
+    handleSendFile,
+    downloadLink,
+    sendStream,
+    roomUsers,
+    remoteStreams,
+    setRemoteStreams,
+    setDownloadLink,
+    setReceivedChunks,
+    receivedChunks,
+    handleSendMessage,
+    setMessage,
+    message,
+    roomMessages,
+    setRoomMessages,
   };
 };
 

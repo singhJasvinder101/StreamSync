@@ -1,0 +1,122 @@
+class PeerService {
+    public peer: RTCPeerConnection | null = null;
+    public fileChannel: RTCDataChannel | undefined;
+    public remoteSocketId: string | null = null;
+
+    constructor() {
+        if (!this.peer) {
+            this.peer = new RTCPeerConnection({
+                iceServers: [
+                    {
+                        urls: "stun:stun4.l.google.com:19302",
+                    },
+                ],
+            });
+            this.fileChannel = this.peer.createDataChannel(
+                `file-transfer-${Date.now()}`
+            );
+        }
+    }
+
+    async getAnswer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
+        if (this.peer) {
+            console.log(offer);
+            await this.peer.setRemoteDescription(new RTCSessionDescription(offer));
+            const ans = await this.peer.createAnswer();
+            await this.peer.setLocalDescription(new RTCSessionDescription(ans));
+            return ans;
+        }
+        throw new Error("Peer connection not initialized");
+    }
+
+    async setLocalDescription(ans: RTCSessionDescriptionInit): Promise<void> {
+        if (this.peer) {
+            await this.peer.setRemoteDescription(new RTCSessionDescription(ans));
+        } else {
+            throw new Error("Peer connection not initialized");
+        }
+    }
+
+    async getOffer(): Promise<RTCSessionDescriptionInit> {
+        if (this.peer) {
+            const offer = await this.peer.createOffer();
+            await this.peer.setLocalDescription(new RTCSessionDescription(offer));
+            return offer;
+        }
+        throw new Error("Peer connection not initialized");
+    }
+}
+
+export default new PeerService();
+
+
+
+// for 3 peer
+class WebRTCSerice {
+    public _peer: RTCPeerConnection
+
+    constructor() {
+        this._peer = new RTCPeerConnection({
+            //@ts-ignore
+            // sdpSemantics: 'unified-plan',
+            iceServers: [
+                {
+                    urls: [
+                        'stun:stun.l.google.com:19302',
+                        'stun:global.stun.twilio.com:3478',
+                    ],
+                },
+            ],
+        })
+    }
+}
+
+
+
+class PeerService {
+    private _webRtc: WebRTCSerice | undefined
+    public myDataChanel: RTCDataChannel | undefined
+    public remoteDataChanel: RTCDataChannel | undefined
+    public remoteSocketId: string | null = null;
+  peer: any
+
+    public init() {
+        if (!this._webRtc) {
+            this._webRtc = new WebRTCSerice()
+            this.myDataChanel = this._webRtc._peer?.createDataChannel(
+                `file-transfer-${Date.now()}`
+            )
+            return this
+        }
+    }
+
+    async getAnswer(offer: RTCSessionDescriptionInit): Promise<RTCSessionDescriptionInit> {
+        if (this._webRtc) {
+            console.log(offer);
+            await this._webRtc._peer.setRemoteDescription(new RTCSessionDescription(offer));
+            const ans = await this._webRtc._peer.createAnswer();
+            await this._webRtc._peer.setLocalDescription(new RTCSessionDescription(ans));
+            return ans;
+        }
+        throw new Error("Peer connection not initialized");
+    }
+
+    async setLocalDescription(ans: RTCSessionDescriptionInit): Promise<void> {
+        if (this._webRtc) {
+            await this._webRtc._peer.setRemoteDescription(new RTCSessionDescription(ans));
+        } else {
+            throw new Error("Peer connection not initialized");
+        }
+    }
+
+    async getOffer(): Promise<RTCSessionDescriptionInit> {
+        if (this._webRtc) {
+            const offer = await this._webRtc._peer.createOffer();
+            await this._webRtc._peer.setLocalDescription(new RTCSessionDescription(offer));
+            return offer;
+        }
+        throw new Error("Peer connection not initialized");
+    }
+}
+
+export default new PeerService();

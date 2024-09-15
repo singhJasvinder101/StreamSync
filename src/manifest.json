@@ -46,7 +46,6 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "reactPlayerFilePlayer.bundle.js",
         "*.js",
         "*.css",
         "icon-128.png",

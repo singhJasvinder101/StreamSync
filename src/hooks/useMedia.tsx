@@ -5,7 +5,7 @@ import { Socket } from 'socket.io-client';
 
 export const useMedia = () => {
     const { socket, remoteSocketId, setRemoteSocketId } = useSocket();
-    const { sendStream } = usePeerService(socket as Socket, remoteSocketId, setRemoteSocketId)
+    const { sendStream, setRemoteStreams } = usePeerService(socket as Socket, remoteSocketId, setRemoteSocketId)
     const { mediaStream, setMediaStream } = useSocket()
 
     const startMedia = async () => {
@@ -17,6 +17,7 @@ export const useMedia = () => {
             localStorage.setItem("isStreamOpen", "true");
             console.log("Media stream started:", stream);
             setMediaStream(stream);
+            // setRemoteStreams(prev => ({ ...prev, [socket?.id as string]: stream }));
             return stream;
         } catch (err) {
             console.error("Media stream not working:", err);
