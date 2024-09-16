@@ -22,10 +22,10 @@ interface SocketContextValue {
 const SocketContext = createContext<SocketContextValue | null>(null);
 
 export const SocketProvider: FC<{ children: ReactNode }> = ({ children }) => {
-    const socket = useMemo(() => io("http://localhost:8000"), []);
+    // const socket = useMemo(() => io("http://localhost:8000"), []);
 
     // production
-    // const socket = useMemo(() => io("http://ec2-13-60-225-135.eu-north-1.compute.amazonaws.com"), []);
+    const socket = useMemo(() => io("http://ec2-13-60-225-135.eu-north-1.compute.amazonaws.com"), []);
     const [remoteSocketId, setRemoteSocketId] = useState<string | null>(null);
     const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null)
     const [mediaStream, setMediaStream] = useState<MediaStream | null>(null)
