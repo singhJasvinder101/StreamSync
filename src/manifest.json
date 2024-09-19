@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Streamers Talk",
+  "name": "Streamers Sync",
   "description": "This is a chrome extension built for the streamers to watch the movies together in real time enjoyment",
   "permissions": [
     "storage",
